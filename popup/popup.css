@@ -175,6 +175,16 @@ body {
   text-decoration: underline;
 }
 
+.instructions ul {
+  padding-left: 16px;
+  margin-top: 4px;
+  list-style: disc;
+}
+
+.instructions ul li {
+  margin-bottom: 2px;
+}
+
 /* ── Footer ─────────────────────────────────────────────────── */
 .footer {
   text-align: center;

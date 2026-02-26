@@ -43,6 +43,19 @@
   transform: scale(0.95);
 }
 
+/* ── Smaller button for Facebook & Messenger ────────────────── */
+.wai-refine-btn--facebook,
+.wai-refine-btn--messenger {
+  width: 26px;
+  height: 26px;
+}
+
+.wai-refine-btn--facebook svg,
+.wai-refine-btn--messenger svg {
+  width: 15px;
+  height: 15px;
+}
+
 .wai-refine-btn--loading {
   pointer-events: none;
   color: #00e5a0;

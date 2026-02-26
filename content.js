@@ -211,7 +211,7 @@
   // ── Floating Button Creation ─────────────────────────────
   function createRefineButton(pairedInputEl) {
     const btn = document.createElement("button");
-    btn.className = BUTTON_CLASS;
+    btn.className = `${BUTTON_CLASS} wai-refine-btn--${PLATFORM}`;
     btn.title = "Refine message with AI ✨";
     btn.innerHTML = SPARKLE_SVG;
     btn.setAttribute("aria-label", "Refine message with AI");
@@ -298,19 +298,20 @@
 
     btn.style.display = "flex";
 
+    // Platform-specific offsets:
+    // FB & Messenger get a smaller button (26px) so offsets differ
+    const isFBLike = PLATFORM === "facebook" || PLATFORM === "messenger";
+    const btnHalf = isFBLike ? 13 : 16;    // half the button size
+    const hGap = isFBLike ? 46 : 38;       // horizontal gap from send button
+
     if (sendBtn) {
       const sendRect = sendBtn.getBoundingClientRect();
-      // Horizontally: just left of the send button
-      const left = sendRect.left - 38;
-      // Vertically: align with the CENTER of the input box (not the
-      // send button — the send icon on FB/Messenger is often in a
-      // taller toolbar so centering on it puts us too high).
-      const top = inputRect.top + (inputRect.height / 2) - 16;
+      const left = sendRect.left - hGap;
+      const top = inputRect.top + (inputRect.height / 2) - btnHalf;
       btn.style.top = `${top}px`;
       btn.style.left = `${left}px`;
     } else {
-      // Fallback: bottom-right corner of the input area
-      const top = inputRect.bottom - 34;
+      const top = inputRect.bottom - (btnHalf * 2 + 2);
       const left = inputRect.right + 4;
       btn.style.top = `${top}px`;
       btn.style.left = `${left}px`;
@@ -373,7 +374,7 @@
     });
 
     // Safety-net poll
-    setInterval(injectButton, POLL_INTERVAL);
+    setInterval(injectButtons, POLL_INTERVAL);
 
     // Keep position updated on scroll / resize
     window.addEventListener("resize", handleReposition);

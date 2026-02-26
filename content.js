@@ -81,33 +81,72 @@
 
   // ── State ────────────────────────────────────────────────
   let isProcessing = false;
+  // Map from input element → our injected button element
+  const buttonMap = new WeakMap();
 
   // ── Utilities ────────────────────────────────────────────
 
-  /** Find the active message input element. */
-  function findInputEl() {
+  /**
+   * Find ALL visible message input elements.
+   * On Facebook there can be multiple chat pop-ups open at once;
+   * on WhatsApp / Messenger there is typically just one.
+   */
+  function findAllInputEls() {
     const config = PLATFORM_CONFIG[PLATFORM];
-    if (!config) return null;
+    if (!config) return [];
+    const results = [];
+    const seen = new Set();
     for (const sel of config.inputSelectors) {
-      // For Facebook, there may be multiple chat windows. Pick the
-      // one that is visible or focused.
       const all = document.querySelectorAll(sel);
       for (const el of all) {
-        if (el.offsetParent !== null) return el; // visible
+        if (!seen.has(el) && el.offsetParent !== null) {
+          seen.add(el);
+          results.push(el);
+        }
       }
+    }
+    return results;
+  }
+
+  /** Convenience: return the first (or only) visible input. */
+  function findInputEl() {
+    return findAllInputEls()[0] || null;
+  }
+
+  /**
+   * Find the send button that belongs to a specific input element.
+   * We walk up from the input to its chat container and search
+   * within that container so we get the right send button when
+   * multiple chats are open (Facebook).
+   */
+  function findSendButtonFor(inputEl) {
+    const config = PLATFORM_CONFIG[PLATFORM];
+    if (!config) return null;
+
+    // Determine a scoped container to search within.
+    // On Facebook chat pop-ups, each chat is inside a container with
+    // role="dialog" or a form. On Messenger it's role="main" or a form.
+    // On WhatsApp the footer works.
+    const container =
+      inputEl.closest('[role="dialog"]') ||
+      inputEl.closest("form") ||
+      inputEl.closest("footer") ||
+      inputEl.closest('[role="footer"]') ||
+      inputEl.parentElement?.parentElement?.parentElement?.parentElement;
+
+    if (!container) return null;
+
+    for (const sel of config.sendButtonSelectors) {
+      const el = container.querySelector(sel);
+      if (el && el.offsetParent !== null) return el;
     }
     return null;
   }
 
-  /** Find the send / mic button to anchor near. */
+  /** Legacy single-result helper (used by the click handler). */
   function findSendButton() {
-    const config = PLATFORM_CONFIG[PLATFORM];
-    if (!config) return null;
-    for (const sel of config.sendButtonSelectors) {
-      const el = document.querySelector(sel);
-      if (el && el.offsetParent !== null) return el;
-    }
-    return null;
+    const inputEl = findInputEl();
+    return inputEl ? findSendButtonFor(inputEl) : null;
   }
 
   /**
@@ -170,12 +209,15 @@
   }
 
   // ── Floating Button Creation ─────────────────────────────
-  function createRefineButton() {
+  function createRefineButton(pairedInputEl) {
     const btn = document.createElement("button");
     btn.className = BUTTON_CLASS;
     btn.title = "Refine message with AI ✨";
     btn.innerHTML = SPARKLE_SVG;
     btn.setAttribute("aria-label", "Refine message with AI");
+
+    // Store a reference to the input this button serves
+    btn._pairedInput = pairedInputEl;
 
     // Prevent WhatsApp / FB from swallowing the click
     btn.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -190,7 +232,13 @@
 
     if (isProcessing) return;
 
-    const inputEl = findInputEl();
+    const btn = e.currentTarget;
+
+    // Use the paired input stored on the button, fallback to global search
+    const inputEl = btn._pairedInput && btn._pairedInput.offsetParent !== null
+      ? btn._pairedInput
+      : findInputEl();
+
     if (!inputEl) {
       showToast("Could not find the message input box.");
       return;
@@ -201,8 +249,6 @@
       showToast("Type a message first, then click the AI button.", "info");
       return;
     }
-
-    const btn = e.currentTarget;
 
     // ── Show loading state ─────────────────────────────────
     isProcessing = true;
@@ -235,71 +281,90 @@
 
   // ── Position the Floating Button ─────────────────────────
   /**
-   * Computes the floating button's position so it hovers just to
-   * the left of the send button. Falls back to the right edge
-   * of the input if the send button isn't found.
+   * Positions the button so it floats just to the left of the
+   * send button for a given input. Uses the input's own bounding
+   * rect as the vertical anchor so it aligns with the compose
+   * area regardless of platform quirks.
    */
   function positionButton(btn) {
-    const sendBtn = findSendButton();
-    const inputEl = findInputEl();
-    const anchor = sendBtn || inputEl;
-    if (!anchor) {
+    const inputEl = btn._pairedInput;
+    if (!inputEl || inputEl.offsetParent === null) {
       btn.style.display = "none";
       return;
     }
 
+    const sendBtn = findSendButtonFor(inputEl);
+    const inputRect = inputEl.getBoundingClientRect();
+
     btn.style.display = "flex";
-    const rect = anchor.getBoundingClientRect();
 
     if (sendBtn) {
-      // Float just to the LEFT of the send / mic button
-      const top = rect.top + (rect.height / 2) - 16 + window.scrollY;
-      const left = rect.left - 40 + window.scrollX;
+      const sendRect = sendBtn.getBoundingClientRect();
+      // Horizontally: just left of the send button
+      const left = sendRect.left - 38;
+      // Vertically: align with the CENTER of the input box (not the
+      // send button — the send icon on FB/Messenger is often in a
+      // taller toolbar so centering on it puts us too high).
+      const top = inputRect.top + (inputRect.height / 2) - 16;
       btn.style.top = `${top}px`;
       btn.style.left = `${left}px`;
     } else {
-      // Fallback: top-right corner of the input area
-      const top = rect.top - 36 + window.scrollY;
-      const left = rect.right - 36 + window.scrollX;
+      // Fallback: bottom-right corner of the input area
+      const top = inputRect.bottom - 34;
+      const left = inputRect.right + 4;
       btn.style.top = `${top}px`;
       btn.style.left = `${left}px`;
     }
   }
 
   // ── Injection Logic ──────────────────────────────────────
-  function injectButton() {
+  /**
+   * Handles multiple chat windows (Facebook can have several pop-up
+   * chats open). Each visible input gets its own floating button.
+   */
+  function injectButtons() {
     if (PLATFORM === "unknown") return;
 
-    const inputEl = findInputEl();
+    const visibleInputs = findAllInputEls();
+    const activeInputSet = new Set(visibleInputs);
 
-    // If there's no input visible, remove any stale buttons
-    if (!inputEl) {
-      document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((b) => b.remove());
-      return;
+    // 1. Remove buttons whose paired input no longer exists / is hidden
+    document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((btn) => {
+      if (!btn._pairedInput || !activeInputSet.has(btn._pairedInput)) {
+        buttonMap.delete(btn._pairedInput);
+        btn.remove();
+      }
+    });
+
+    // 2. For each visible input, ensure a button exists and is positioned
+    for (const inputEl of visibleInputs) {
+      let btn = buttonMap.get(inputEl);
+
+      if (!btn || !btn.isConnected) {
+        // Create a new button for this input
+        btn = createRefineButton(inputEl);
+        document.body.appendChild(btn);
+        buttonMap.set(inputEl, btn);
+      }
+
+      positionButton(btn);
     }
-
-    let btn = document.querySelector(`.${BUTTON_CLASS}`);
-    if (!btn) {
-      btn = createRefineButton();
-      document.body.appendChild(btn);
-    }
-
-    positionButton(btn);
   }
 
   // ── Reposition on Scroll / Resize ────────────────────────
   function handleReposition() {
-    const btn = document.querySelector(`.${BUTTON_CLASS}`);
-    if (btn) positionButton(btn);
+    document.querySelectorAll(`.${BUTTON_CLASS}`).forEach((btn) => {
+      positionButton(btn);
+    });
   }
 
   // ── Observer + Poll ──────────────────────────────────────
   function startObserving() {
-    injectButton();
+    injectButtons();
 
     // MutationObserver for SPA re-renders
     const observer = new MutationObserver(() => {
-      injectButton();
+      injectButtons();
     });
 
     observer.observe(document.body, {

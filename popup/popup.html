@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp AI Refiner</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="popup">
+      <!-- Header -->
+      <div class="header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" width="22" height="22" class="header-icon">
+          <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74L12 2z"/>
+        </svg>
+        <h1>WhatsApp AI Refiner</h1>
+      </div>
+
+      <!-- API Key Section -->
+      <div class="section">
+        <label for="api-key">Groq API Key</label>
+        <div class="input-row">
+          <input
+            type="password"
+            id="api-key"
+            placeholder="gsk_..."
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button id="toggle-visibility" class="icon-btn" title="Show/Hide key">
+            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+        <button id="save-btn" class="primary-btn">Save Key</button>
+        <p id="status-msg" class="status-msg"></p>
+      </div>
+
+      <!-- Instructions -->
+      <div class="section instructions">
+        <h2>How to use</h2>
+        <ol>
+          <li>Get a free API key from <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a></li>
+          <li>Paste your key above and click <strong>Save Key</strong></li>
+          <li>Open <a href="https://web.whatsapp.com" target="_blank">WhatsApp Web</a></li>
+          <li>Type a message, then click the <strong>✨ sparkle</strong> button</li>
+          <li>Your message will be refined by AI instantly!</li>
+        </ol>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <span>Only your message text is sent to Groq. Nothing else.</span>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

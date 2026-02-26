@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────
-// WhatsApp AI Refiner – Background Service Worker
+// AI Message Refiner – Background Service Worker
 // Handles Groq API calls on behalf of the content script.
 // Only the raw message text is sent; no other data is transmitted.
+// Works with WhatsApp Web, Facebook Chat & Messenger.
 // ─────────────────────────────────────────────────────────────
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";

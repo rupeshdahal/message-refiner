@@ -18,9 +18,25 @@
         <h1>AI Message Refiner</h1>
       </div>
 
+      <!-- Provider Selection -->
+      <div class="section">
+        <label for="provider-select">AI Provider</label>
+        <select id="provider-select" class="select-input">
+          <option value="groq">Groq (Free)</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="mistral">Mistral AI</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+        </select>
+        <p class="provider-hint">
+          Get your key from <a id="provider-link" href="https://console.groq.com/keys" target="_blank">console.groq.com</a>
+        </p>
+      </div>
+
       <!-- API Key Section -->
       <div class="section">
-        <label for="api-key">Groq API Key</label>
+        <label for="api-key">API Key</label>
         <div class="input-row">
           <input
             type="password"
@@ -37,16 +53,32 @@
             </svg>
           </button>
         </div>
-        <button id="save-btn" class="primary-btn">Save Key</button>
-        <p id="status-msg" class="status-msg"></p>
       </div>
+
+      <!-- Model Override (optional) -->
+      <div class="section">
+        <label for="model-input">Model <span class="label-hint">(optional)</span></label>
+        <input
+          type="text"
+          id="model-input"
+          class="text-input"
+          placeholder="Leave blank for default"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <p class="model-default" id="model-default">Default: <code>llama-3.3-70b-versatile</code></p>
+      </div>
+
+      <!-- Save -->
+      <button id="save-btn" class="primary-btn">Save Settings</button>
+      <p id="status-msg" class="status-msg"></p>
 
       <!-- Instructions -->
       <div class="section instructions">
         <h2>How to use</h2>
         <ol>
-          <li>Get a free API key from <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a></li>
-          <li>Paste your key above and click <strong>Save Key</strong></li>
+          <li>Choose a provider and paste your API key above</li>
+          <li>Click <strong>Save Settings</strong></li>
           <li>Open any supported chat:
             <ul>
               <li><a href="https://web.whatsapp.com" target="_blank">WhatsApp Web</a></li>
@@ -54,14 +86,14 @@
               <li><a href="https://www.messenger.com" target="_blank">Messenger</a></li>
             </ul>
           </li>
-          <li>Type a message, then click the floating <strong>✨ sparkle</strong> button near the send button</li>
+          <li>Type a message, then click the floating <strong>&#10024; sparkle</strong> button</li>
           <li>Your message will be refined by AI instantly!</li>
         </ol>
       </div>
 
       <!-- Footer -->
       <div class="footer">
-        <span>Only your message text is sent to Groq. Nothing else.</span>
+        <span>Only your message text is sent to the AI. Nothing else.</span>
       </div>
     </div>
 

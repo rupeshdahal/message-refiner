@@ -262,7 +262,9 @@
         text,
       });
 
-      if (response.success) {
+      if (!response) {
+        showToast("No response from background. Try reloading the extension.");
+      } else if (response.success) {
         setInputText(inputEl, response.refined);
         showToast("Message refined ✨", "success");
       } else {

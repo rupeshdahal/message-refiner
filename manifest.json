@@ -3,7 +3,7 @@
   "name": "AI Message Refiner",
   "version": "3.0.0",
   "description": "Refine your messages with AI on WhatsApp Web, Facebook Chat & Messenger. Supports Groq, Gemini, OpenAI, OpenRouter & more.",
-  "permissions": ["storage"],
+  "permissions": ["storage", "clipboardRead", "clipboardWrite"],
   "host_permissions": [
     "https://api.groq.com/*",
     "https://generativelanguage.googleapis.com/*",

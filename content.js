@@ -169,45 +169,119 @@
 
   /**
    * Set text inside a contenteditable input (replaces ALL content).
-   * Uses execCommand("insertText") so React/Lexical picks up the change.
-   * Falls back to direct DOM manipulation if execCommand fails.
+   * Works with WhatsApp's Lexical editor by simulating native user
+   * actions: Ctrl+A to select all, then paste from clipboard.
+   * Falls back through multiple strategies if one fails.
    */
-  function setInputText(inputEl, text) {
+  async function setInputText(inputEl, text) {
     inputEl.focus();
 
-    // Small delay to ensure focus is established before selecting
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Select all existing content
-        const selection = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(inputEl);
-        selection.removeAllRanges();
-        selection.addRange(range);
+    // Strategy 1: Select all via keyboard simulation + clipboard paste
+    // This is the most reliable with Lexical / React frameworks
+    try {
+      // Select all content using Ctrl+A / Cmd+A
+      inputEl.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "a", code: "KeyA", keyCode: 65,
+        ctrlKey: true, metaKey: true, bubbles: true, cancelable: true
+      }));
 
-        // Try execCommand first (works best with React/Lexical)
-        const success = document.execCommand("insertText", false, text);
+      // Also programmatically select all as a safety net
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(inputEl);
+      sel.removeAllRanges();
+      sel.addRange(range);
 
-        if (!success || getInputText(inputEl).trim() !== text.trim()) {
-          // Fallback: clear and set via DOM + synthetic events
-          inputEl.innerHTML = "";
-          const textNode = document.createTextNode(text);
-          inputEl.appendChild(textNode);
+      // Small delay to let the selection register
+      await new Promise((r) => setTimeout(r, 50));
 
-          // Move cursor to end
-          const newRange = document.createRange();
-          newRange.selectNodeContents(inputEl);
-          newRange.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
-        }
+      // Delete selected content
+      document.execCommand("delete", false, null);
 
-        // Dispatch events so the framework picks up the change
-        inputEl.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
-        inputEl.dispatchEvent(new Event("change", { bubbles: true }));
-        resolve();
-      }, 50);
-    });
+      // Another small delay after deletion
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Re-focus after delete (Lexical can move focus)
+      inputEl.focus();
+
+      // Now insert via clipboard paste (most reliable for Lexical)
+      const clipResult = await insertViaClipboard(inputEl, text);
+      if (clipResult) return;
+
+      // If clipboard failed, try execCommand insertText
+      const execResult = document.execCommand("insertText", false, text);
+      if (execResult && getInputText(inputEl).trim().length > 0) return;
+
+    } catch (e) {
+      console.warn("[AI Message Refiner] Strategy 1 failed:", e);
+    }
+
+    // Strategy 2: Direct DOM manipulation as last resort
+    inputEl.focus();
+    inputEl.innerHTML = "";
+
+    // For WhatsApp Lexical: create the expected span structure
+    if (PLATFORM === "whatsapp") {
+      const p = document.createElement("p");
+      const span = document.createElement("span");
+      span.setAttribute("data-lexical-text", "true");
+      span.textContent = text;
+      p.appendChild(span);
+      inputEl.appendChild(p);
+    } else {
+      const p = document.createElement("p");
+      p.textContent = text;
+      inputEl.appendChild(p);
+    }
+
+    // Fire all the events frameworks listen for
+    inputEl.dispatchEvent(new InputEvent("input", {
+      bubbles: true, inputType: "insertText", data: text
+    }));
+    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  /**
+   * Insert text by writing to the clipboard and simulating Ctrl+V / Cmd+V.
+   * Returns true if it succeeded.
+   */
+  async function insertViaClipboard(inputEl, text) {
+    try {
+      // Save original clipboard content
+      let originalClip = "";
+      try { originalClip = await navigator.clipboard.readText(); } catch (_) {}
+
+      // Write our text to clipboard
+      await navigator.clipboard.writeText(text);
+
+      // Simulate paste via execCommand
+      const pasteOk = document.execCommand("paste");
+
+      if (!pasteOk) {
+        // Manual paste: dispatch a paste event with clipboardData
+        const pasteEvent = new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: new DataTransfer()
+        });
+        pasteEvent.clipboardData.setData("text/plain", text);
+        inputEl.dispatchEvent(pasteEvent);
+      }
+
+      // Restore original clipboard after a small delay
+      setTimeout(async () => {
+        try { await navigator.clipboard.writeText(originalClip); } catch (_) {}
+      }, 200);
+
+      // Verify text was inserted
+      await new Promise((r) => setTimeout(r, 100));
+      const currentText = getInputText(inputEl).trim();
+      return currentText.length > 0;
+    } catch (e) {
+      console.warn("[AI Message Refiner] Clipboard paste failed:", e);
+      return false;
+    }
   }
 
   /**

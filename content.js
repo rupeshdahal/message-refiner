@@ -168,25 +168,46 @@
   }
 
   /**
-   * Set text inside a contenteditable input.
+   * Set text inside a contenteditable input (replaces ALL content).
    * Uses execCommand("insertText") so React/Lexical picks up the change.
+   * Falls back to direct DOM manipulation if execCommand fails.
    */
   function setInputText(inputEl, text) {
     inputEl.focus();
 
-    // Select all existing content
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(inputEl);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    // Small delay to ensure focus is established before selecting
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Select all existing content
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(inputEl);
+        selection.removeAllRanges();
+        selection.addRange(range);
 
-    // insertText works with contenteditable across all platforms
-    document.execCommand("insertText", false, text);
+        // Try execCommand first (works best with React/Lexical)
+        const success = document.execCommand("insertText", false, text);
 
-    // Dispatch events so the framework picks up the change
-    inputEl.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
-    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+        if (!success || getInputText(inputEl).trim() !== text.trim()) {
+          // Fallback: clear and set via DOM + synthetic events
+          inputEl.innerHTML = "";
+          const textNode = document.createTextNode(text);
+          inputEl.appendChild(textNode);
+
+          // Move cursor to end
+          const newRange = document.createRange();
+          newRange.selectNodeContents(inputEl);
+          newRange.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+
+        // Dispatch events so the framework picks up the change
+        inputEl.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+        inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+        resolve();
+      }, 50);
+    });
   }
 
   /**
@@ -330,7 +351,7 @@
           replaceSelectedText(inputEl, response.refined, savedRange);
           showToast("Selected text refined ✨", "success");
         } else {
-          setInputText(inputEl, response.refined);
+          await setInputText(inputEl, response.refined);
           showToast("Message refined ✨", "success");
         }
       } else {

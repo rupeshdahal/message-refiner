@@ -189,6 +189,49 @@
     inputEl.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  /**
+   * Check if there is a text selection inside the given input element.
+   * Returns the selected text string, or "" if nothing is selected
+   * (or if the entire input is selected — treat that as "refine all").
+   */
+  function getSelectedTextInInput(inputEl) {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return "";
+
+    const range = sel.getRangeAt(0);
+
+    // Make sure the selection is actually inside our input
+    if (!inputEl.contains(range.startContainer) || !inputEl.contains(range.endContainer)) {
+      return "";
+    }
+
+    const selectedText = sel.toString();
+    const fullText = getInputText(inputEl).trim();
+
+    // If the selection covers the entire text, treat as "refine all"
+    if (selectedText.trim() === fullText) return "";
+
+    return selectedText;
+  }
+
+  /**
+   * Replace only the currently selected text inside a contenteditable input.
+   * The selection must still be active. We restore focus, re-validate the
+   * selection, then use execCommand("insertText") to swap in the new text.
+   */
+  function replaceSelectedText(inputEl, newText, savedRange) {
+    inputEl.focus();
+
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+
+    document.execCommand("insertText", false, newText);
+
+    inputEl.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   // ── Toast Notification ───────────────────────────────────
   function showToast(message, type = "error") {
     document.querySelectorAll(".wai-toast").forEach((t) => t.remove());
@@ -219,8 +262,12 @@
     // Store a reference to the input this button serves
     btn._pairedInput = pairedInputEl;
 
-    // Prevent WhatsApp / FB from swallowing the click
-    btn.addEventListener("mousedown", (e) => e.stopPropagation());
+    // Prevent WhatsApp / FB from swallowing the click AND
+    // keep the user's text selection alive inside the input
+    btn.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    });
     btn.addEventListener("click", handleRefineClick);
     return btn;
   }
@@ -244,29 +291,48 @@
       return;
     }
 
-    const text = getInputText(inputEl).trim();
-    if (!text) {
+    const fullText = getInputText(inputEl).trim();
+    if (!fullText) {
       showToast("Type a message first, then click the AI button.", "info");
       return;
+    }
+
+    // ── Detect partial selection ───────────────────────────
+    const selectedText = getSelectedTextInInput(inputEl);
+    const isPartial = selectedText.length > 0;
+    const textToRefine = isPartial ? selectedText : fullText;
+
+    // Save the selection range so we can restore it after the API call
+    let savedRange = null;
+    if (isPartial) {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        savedRange = sel.getRangeAt(0).cloneRange();
+      }
     }
 
     // ── Show loading state ─────────────────────────────────
     isProcessing = true;
     btn.innerHTML = SPINNER_SVG;
     btn.classList.add("wai-refine-btn--loading");
-    btn.title = "Refining your message…";
+    btn.title = isPartial ? "Refining selected text…" : "Refining your message…";
 
     try {
       const response = await chrome.runtime.sendMessage({
         type: "REFINE_MESSAGE",
-        text,
+        text: textToRefine,
       });
 
       if (!response) {
         showToast("No response from background. Try reloading the extension.");
       } else if (response.success) {
-        setInputText(inputEl, response.refined);
-        showToast("Message refined ✨", "success");
+        if (isPartial && savedRange) {
+          replaceSelectedText(inputEl, response.refined, savedRange);
+          showToast("Selected text refined ✨", "success");
+        } else {
+          setInputText(inputEl, response.refined);
+          showToast("Message refined ✨", "success");
+        }
       } else {
         showToast(response.error || "Failed to refine message.");
       }
